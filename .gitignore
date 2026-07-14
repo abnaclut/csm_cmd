@@ -33,3 +33,8 @@ lib/
 
 # Compiler dependency files
 compiler_depend.internal
+
+# Releases
+*.zip
+*.7z
+install/
