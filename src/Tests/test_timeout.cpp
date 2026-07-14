@@ -4,7 +4,7 @@
 
 #include <gtest/gtest.h>
 
-#include "../CmdReg/command_registry.hpp"
+#include "../../include/command_registry.hpp"
 
 using csm_cmd::CommandRegistry;
 

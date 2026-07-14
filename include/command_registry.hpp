@@ -13,13 +13,10 @@ namespace csm_cmd
 /**
  * @brief Thrown when executing an unregistered or malformed command.
  */
-class CommandError : public std::runtime_error
+class CommandError final : public std::runtime_error
 {
 public:
-  explicit CommandError(const std::string& message)
-    : std::runtime_error(message)
-  {
-  }
+  explicit CommandError(const std::string& message) : std::runtime_error(message) {}
 };
 
 /**
@@ -41,9 +38,7 @@ public:
    * @brief Register a new command
    * @throws CommandError if name is empty or already registered
    */
-  void registerCommand(const std::string& name,
-                       CommandHandler handler,
-                       const std::string& description);
+  void registerCommand(const std::string& name, CommandHandler handler, const std::string& description);
 
   /**
    * @brief Register an alias for an existing command

@@ -9,8 +9,8 @@
 
 #include <replxx.hxx>
 
-#include "../CmdParser/command_parser.hpp"
-#include "../CmdReg/command_registry.hpp"
+#include "command_parser.hpp"
+#include "command_registry.hpp"
 
 namespace csm_cmd
 {
@@ -87,8 +87,8 @@ private:
   void loadHistory();
   void saveHistory();
   void flushHistoryCache();
-  int dispatch(const std::vector<std::string>& tokens);
-  int executeWithTimeout(const std::string& name, const std::vector<std::string>& args);
+  int dispatch(const std::vector<std::string>& tokens) const;
+  int executeWithTimeout(const std::string& name, const std::vector<std::string>& args) const;
 
   static std::string escapeOutput(const std::string& text);
   static void installSignalHandler(Terminal* self);

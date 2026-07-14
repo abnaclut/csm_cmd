@@ -2,7 +2,7 @@
 #include <iostream>
 #include <string>
 #include <thread>
-#include "CsmTerminal/csm_terminal.hpp"
+#include "../include/csm_terminal.hpp"
 #include <clocale>
 #include <locale>
 #include <windows.h>
