@@ -36,7 +36,7 @@ public:
    * @throws ParseError if the line exceeds kMaxInputLength or contains an
    *         unterminated quote.
    */
-  std::vector<std::string> parse(const std::string& line) const;
+  static std::vector<std::string> parse(const std::string& line) ;
 };
 
 }  // namespace csm_cmd

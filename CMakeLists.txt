@@ -18,8 +18,7 @@ endif()
 option(BUILD_SHARED_LIBS         "Build shared libraries"                                  OFF)
 option(CSM_CMD_BUILD_TESTS       "Build csm_cmd unit tests"                                ON)
 option(CSM_CMD_BUILD_EXAMPLES    "Build example applications"                              OFF)
-option(CSM_CMD_BUILD_TERMINAL    "Build terminal test application"                         OFF)
-option(CSM_CMD_INSTALL           "Enable installation (disable when used as subdirectory)" OFF)
+option(CSM_CMD_BUILD_TERMINAL    "Build terminal test application"                         ON)
 option(CSM_CMD_USE_SYSTEM_REPLXX "Use system replxx instead of FetchContent"               OFF)
 
 # ============================================================
@@ -45,6 +44,20 @@ else()
 endif()
 
 # ============================================================
+# Common compiler warnings
+# ============================================================
+function(target_add_warnings TARGET)
+  target_compile_options(${TARGET} PRIVATE
+          $<$<OR:$<CXX_COMPILER_ID:GNU>,$<CXX_COMPILER_ID:Clang>>:
+          -Wall -Wextra -Wpedantic
+          >
+          $<$<CXX_COMPILER_ID:MSVC>:
+          /W4
+          >
+  )
+endfunction()
+
+# ============================================================
 # Main library
 # ============================================================
 set(SOURCES
@@ -56,11 +69,11 @@ set(SOURCES
 )
 
 set(PUBLIC_HEADERS
-        include/csm_cmd/cmd_parser.hpp
-        include/csm_cmd/cmd_registry.hpp
-        include/csm_cmd/cmd_registration.hpp
-        include/csm_cmd/csm_terminal.hpp
-        include/csm_cmd/logger.hpp
+        include/cmd_parser.hpp
+        include/cmd_registry.hpp
+        include/cmd_registration.hpp
+        include/csm_terminal.hpp
+        include/logger.hpp
 )
 
 add_library(csm_cmd ${SOURCES} ${PUBLIC_HEADERS})
@@ -76,8 +89,7 @@ set_target_properties(csm_cmd PROPERTIES
 # Include directories
 target_include_directories(csm_cmd
         PUBLIC
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-        $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
         PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
@@ -89,7 +101,7 @@ target_link_libraries(csm_cmd
         Threads::Threads
 )
 
-# Compiler warnings
+# Apply warnings with extra flags for library
 target_compile_options(csm_cmd PRIVATE
         $<$<OR:$<CXX_COMPILER_ID:GNU>,$<CXX_COMPILER_ID:Clang>>:
         -Wall -Wextra -Wpedantic -Werror=return-type
@@ -100,27 +112,15 @@ target_compile_options(csm_cmd PRIVATE
 )
 
 # ============================================================
-# Export for use as subdirectory (thirdparty)
-# ============================================================
-export(TARGETS csm_cmd
-        NAMESPACE csm_cmd::
-        FILE "${CMAKE_CURRENT_BINARY_DIR}/csm_cmdTargets.cmake"
-)
-
-# ============================================================
-# Terminal test application (only for development)
+# Terminal application
 # ============================================================
 if(CSM_CMD_BUILD_TERMINAL)
   add_executable(csm_terminal src/main.cpp)
   target_link_libraries(csm_terminal PRIVATE csm_cmd)
+  target_add_warnings(csm_terminal)
 
-  target_compile_options(csm_terminal PRIVATE
-          $<$<OR:$<CXX_COMPILER_ID:GNU>,$<CXX_COMPILER_ID:Clang>>:
-          -Wall -Wextra -Wpedantic
-          >
-          $<$<CXX_COMPILER_ID:MSVC>:
-          /W4
-          >
+  set_target_properties(csm_terminal PROPERTIES
+          RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
   )
 endif()
 
@@ -153,13 +153,10 @@ if(CSM_CMD_BUILD_TESTS)
           gtest_main
   )
 
-  target_compile_options(csm_cmd_tests PRIVATE
-          $<$<OR:$<CXX_COMPILER_ID:GNU>,$<CXX_COMPILER_ID:Clang>>:
-          -Wall -Wextra -Wpedantic
-          >
-          $<$<CXX_COMPILER_ID:MSVC>:
-          /W4
-          >
+  target_add_warnings(csm_cmd_tests)
+
+  set_target_properties(csm_cmd_tests PROPERTIES
+          RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
   )
 
   include(GoogleTest)
@@ -172,60 +169,16 @@ endif()
 if(CSM_CMD_BUILD_EXAMPLES)
   add_executable(example_simple examples/simple/main.cpp)
   target_link_libraries(example_simple PRIVATE csm_cmd)
+  target_add_warnings(example_simple)
+  set_target_properties(example_simple PROPERTIES
+          RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+  )
 
   add_executable(example_custom examples/custom/main.cpp)
   target_link_libraries(example_custom PRIVATE csm_cmd)
-endif()
-
-# ============================================================
-# Installation (disabled by default for thirdparty usage)
-# ============================================================
-if(CSM_CMD_INSTALL)
-  include(GNUInstallDirs)
-  include(CMakePackageConfigHelpers)
-
-  # Install library
-  install(TARGETS csm_cmd
-          EXPORT csm_cmdTargets
-          ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-          LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-          RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-          INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
-  )
-
-  # Install public headers
-  install(FILES ${PUBLIC_HEADERS}
-          DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/csm_cmd
-  )
-
-  # Install CMake package config
-  write_basic_package_version_file(
-          "${CMAKE_CURRENT_BINARY_DIR}/csm_cmdConfigVersion.cmake"
-          VERSION ${PROJECT_VERSION}
-          COMPATIBILITY SameMajorVersion
-  )
-
-  configure_package_config_file(
-          "${CMAKE_CURRENT_SOURCE_DIR}/cmake/csm_cmdConfig.cmake.in"
-          "${CMAKE_CURRENT_BINARY_DIR}/csm_cmdConfig.cmake"
-          INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/csm_cmd
-  )
-
-  install(EXPORT csm_cmdTargets
-          NAMESPACE csm_cmd::
-          DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/csm_cmd
-  )
-
-  install(FILES
-          "${CMAKE_CURRENT_BINARY_DIR}/csm_cmdConfig.cmake"
-          "${CMAKE_CURRENT_BINARY_DIR}/csm_cmdConfigVersion.cmake"
-          DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/csm_cmd
-  )
-
-  # Install documentation (optional)
-  install(DIRECTORY docs/
-          DESTINATION ${CMAKE_INSTALL_DOCDIR}
-          PATTERN ".git" EXCLUDE
+  target_add_warnings(example_custom)
+  set_target_properties(example_custom PROPERTIES
+          RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
   )
 endif()
 
@@ -241,6 +194,5 @@ message(STATUS "  Shared libraries:          ${BUILD_SHARED_LIBS}")
 message(STATUS "  Build tests:               ${CSM_CMD_BUILD_TESTS}")
 message(STATUS "  Build examples:            ${CSM_CMD_BUILD_EXAMPLES}")
 message(STATUS "  Build terminal:            ${CSM_CMD_BUILD_TERMINAL}")
-message(STATUS "  Install enabled:           ${CSM_CMD_INSTALL}")
 message(STATUS "  Use system replxx:         ${CSM_CMD_USE_SYSTEM_REPLXX}")
 message(STATUS "")

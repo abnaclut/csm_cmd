@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 
-#include "../../include/command_parser.hpp"
+#include <cmd_parser.hpp>
 
 using csm_cmd::CommandParser;
 using csm_cmd::ParseError;

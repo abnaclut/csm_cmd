@@ -1,5 +1,5 @@
-#include "../../include/cmd_registration.hpp"
-#include "../Logger/logger.hpp"
+#include <cmd_registration.hpp>
+#include <logger.hpp>
 
 #include <mutex>
 #include <memory>

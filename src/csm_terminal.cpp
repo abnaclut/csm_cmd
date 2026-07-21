@@ -1,4 +1,4 @@
-#include "../../include/csm_terminal.hpp"
+#include <csm_terminal.hpp>
 
 #include <csignal>
 #include <cstdlib>
@@ -10,7 +10,7 @@
 #include <algorithm>
 #include <fstream>
 
-#include "../Logger/logger.hpp"
+#include <logger.hpp>
 
 namespace csm_cmd
 {

@@ -1,4 +1,4 @@
-#include "../../include/command_registry.hpp"
+#include <cmd_registry.hpp>
 
 #include <algorithm>
 

@@ -8,9 +8,8 @@
 #include <string>
 #include <vector>
 #include <unordered_map>
-
-#include "csm_terminal.hpp"
-#include "command_registry.hpp"
+#include <csm_terminal.hpp>
+#include <cmd_registry.hpp>
 
 namespace csm_cmd
 {

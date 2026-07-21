@@ -1,4 +1,4 @@
-#include "../Logger/logger.hpp"
+#include <logger.hpp>
 
 #include <array>
 #include <cstdio>

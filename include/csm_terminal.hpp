@@ -9,8 +9,8 @@
 
 #include <replxx.hxx>
 
-#include "command_parser.hpp"
-#include "command_registry.hpp"
+#include <cmd_parser.hpp>
+#include <cmd_registry.hpp>
 
 namespace csm_cmd
 {

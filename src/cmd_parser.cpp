@@ -1,11 +1,10 @@
-#include "../../include/command_parser.hpp"
-
+#include <cmd_parser.hpp>
 #include <cctype>
 
 namespace csm_cmd
 {
 
-std::vector<std::string> CommandParser::parse(const std::string& line) const
+std::vector<std::string> CommandParser::parse(const std::string& line)
 {
   if (line.size() > kMaxInputLength)
   {

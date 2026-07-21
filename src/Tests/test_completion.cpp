@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 
-#include "../../include/command_registry.hpp"
+#include <cmd_registry.hpp>
 
 using csm_cmd::CommandRegistry;
 
