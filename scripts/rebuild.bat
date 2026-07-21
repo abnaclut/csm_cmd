@@ -1,7 +1,7 @@
 @echo off
 setlocal enabledelayedexpansion
 
-:: Переход в корень проекта (где лежит CMakeLists.txt)
+:: goto proj root
 cd /d "%~dp0.."
 if errorlevel 1 (
     echo [ERROR] Failed to change to project root
@@ -11,13 +11,13 @@ if errorlevel 1 (
 
 echo.
 echo ========================================
-echo    csm_cmd - FORCE REBUILD
+echo    csm_cmd - DEFAULT REBUILD
 echo ========================================
 echo.
 
 set BUILD_DIR=build
 
-:: Проверка CMake
+:: check CMake
 where cmake >nul 2>nul
 if errorlevel 1 (
     echo [ERROR] CMake not found in PATH
@@ -25,7 +25,7 @@ if errorlevel 1 (
     exit /b 1
 )
 
-:: Проверка Ninja
+:: check Ninja
 where ninja >nul 2>nul
 if errorlevel 1 (
     echo [ERROR] Ninja not found in PATH
@@ -33,7 +33,7 @@ if errorlevel 1 (
     exit /b 1
 )
 
-:: 1. Удалить build
+:: delete old build dir
 echo [1/5] Deleting build directory...
 if exist "%BUILD_DIR%" (
     rmdir /s /q "%BUILD_DIR%"
@@ -47,7 +47,7 @@ if exist "%BUILD_DIR%" (
     echo [OK] Nothing to delete
 )
 
-:: 2. Создать build
+:: create new build dir
 echo [2/5] Creating build directory...
 mkdir "%BUILD_DIR%"
 if errorlevel 1 (
@@ -57,7 +57,7 @@ if errorlevel 1 (
 )
 echo [OK] Created
 
-:: 3. Зайти в build
+:: cd build
 cd "%BUILD_DIR%"
 if errorlevel 1 (
     echo [ERROR] Failed to enter build directory
@@ -66,7 +66,7 @@ if errorlevel 1 (
 )
 echo [OK] Entered
 
-:: 4. CMake
+:: CMake
 echo [3/5] Running CMake...
 cmake .. -G "Ninja" -DCMAKE_BUILD_TYPE=Release -DBUILD_TERMINAL_TESTS=ON -DCMAKE_CXX_FLAGS="-mconsole"
 if errorlevel 1 (
@@ -77,7 +77,7 @@ if errorlevel 1 (
 )
 echo [OK] CMake done
 
-:: 5. Сборка ВСЕГО
+:: build everything
 echo [4/5] Building...
 ninja
 if errorlevel 1 (
@@ -88,7 +88,7 @@ if errorlevel 1 (
 )
 echo [OK] Build done
 
-:: 6. Тесты
+:: run tests
 echo [5/5] Running tests...
 ctest --output-on-failure
 
