@@ -1,86 +1,106 @@
 # CSM-CMD: CSBot cmd module
 
-Терминальный обработчик команд для режима --nogui на базе replxx.
+**Terminal command handler for --nogui mode based on replxx.**
 
-## Фичи
+---
 
-- Цветной вывод с поддержкой ANSI
-- Автодополнение команд по Tab (и обработка стрелок)
-- История команд с сохранением в файл
-- Алиасы для команд
-- Таймаут выполнения команд
-- Ротация логов
-- Защита от ANSI-инъекций
-- Легко интегрировать
-## Сборка
+## Features
+
+- Color output with ANSI support
+- Tab autocompletion with arrow key handling
+- Command history with file persistence
+- Command aliases
+- Command execution timeout
+- Log rotation
+- ANSI injection protection
+- Easy integration
+
+---
+
+## Build
+
 ```
 ./rebuild.bat
 ```
 ```
-Опции сборки:
 
-BUILD_TERMINAL_TESTS    - Сборка тестов (ON по умолчанию)
-BUILD_CSM_CMD_EXAMPLES  - Сборка примеров (OFF по умолчанию)
+Build options:
+___________________________________________________________________
+| Option                   | Description                | Default |
+|--------------------------|----------------------------|---------|
+| `BUILD_TERMINAL_TESTS`   | Build unit tests           | ON      |
+| `BUILD_CSM_CMD_EXAMPLES` | Build example applications | OFF     |
+|-----------------------------------------------------------------|
+Requirements:
 
-Требования:
-
-CMake >= 3.16
-Компилятор с поддержкой C++20 (можно легко понизить но придется рефакторить)
-Доступ к сети (FetchContent скачивает replxx и googletest)
+- CMake >= 3.16
+- C++20 compiler (can be downgraded with a bit of refactoring)
+- Internet access (FetchContent downloads replxx and googletest)
 ```
-## Запуск
-
-```
-./build/bin/csm_terminal
-./build/bin/csm_terminal --timeout-ms 200
-./build/bin/csm_terminal --help
-```
+## Run
 
 ```
-Встроенные команды:
+./build/bin/csm_terminal.exe
+./build/bin/csm_cmd_tests.exe
 
-  help      - Список всех доступных команд
-  history   - Показать историю команд
-  clear     - Очистить экран терминала
-  quit      - Выйти из терминала
-  echo      - Вывести аргументы обратно
-  version   - Версия терминала
-  time      - Текущая дата и время
-
-Демонстрационные команды(для тестов, будут удалятся и добавлятся):
-
-  greet     - Приветствие
-  list      - Список элементов
-  ls        - Алиас для list
-  slow      - Команда с задержкой (демонстрация таймаута)
-  stats     - Демонстрация системной статистики
+(in case someone has a reason to run a terminal module that is useless by itself)
 ```
-## Интеграция
 
-Через add_subdirectory:
 ```
+В
+Built-in commands:
+___________________________________________
+| Command   | Description                 |
+|-----------|-----------------------------|
+| `help`    | List all available commands |
+| `history` | Show command history        |
+| `clear`   | Clear terminal screen       |
+| `quit`    | Exit terminal               |
+| `exit`    | Exit terminal               |
+| `echo`    | Echo arguments              |
+| `version` | Show terminal version       |
+| `time`    | Current date and time       |
+|-----------------------------------------|
+
+Test commands (for testing, will be removed/added randomly):
+*Note: they are removed via .clear() before rigistering your commands. 
+
+| Command | Description                       |
+|---------|-----------------------------------|
+| `greet` | Hello world                       |
+| `list`  | List items                        |
+| `ls`    | Alias for list                    |
+| `slow`  | Command with delay                |
+| `stats` | System statistics demo            |
+|---------------------------------------------|
+```
+## Integration
+
+### Via add_subdirectory
+
+```cmake
 add_subdirectory(third_party/csm_cmd)
 target_link_libraries(your_app PRIVATE csm_cmd)
 ```
-Через FetchContent:
+Via FetchContent:
 ```
 include(FetchContent)
 FetchContent_Declare(
-csm_cmd
-GIT_REPOSITORY https://github.com/abnaclut/CSM-CMD.git
-GIT_TAG main
+    csm_cmd
+    GIT_REPOSITORY https://github.com/abnaclut/csm_cmd.git
+    GIT_TAG main
 )
 FetchContent_MakeAvailable(csm_cmd)
 target_link_libraries(your_app PRIVATE csm_cmd)
 ```
-Через find_package (после установки):
+Via find_package (after installation):
 ```
 find_package(csm_cmd REQUIRED)
 target_link_libraries(your_app PRIVATE csm_cmd)
 ```
-## Использование в коде
+## Usage
 ```
-Публичный API (рекомендуемый):
+Public API (recommended):
 
 #include <csm_cmd/cmd_registration.hpp>
 
@@ -111,7 +131,7 @@ int main()
   return 0;
 }
 
-Внутренний API (для тестирования):
+Internal API (for testing):
 
 #include <csm_cmd/csm_terminal.hpp>
 
@@ -125,7 +145,7 @@ void testTerminal()
   }, "Test command");
 }
 ```
-Регистрация команд с аргументами:
+### Registering commands with arguments:
 ```
 regCmd("set", [](const std::vector<std::string>& args) -> int
 {
@@ -139,7 +159,7 @@ regCmd("set", [](const std::vector<std::string>& args) -> int
   return 0;
 }, "Set configuration value");
 ```
-Обработка ошибок в командах:
+###     Error handling in commands:
 ```
 regCmd("divide", [](const std::vector<std::string>& args) -> int
 {
@@ -172,18 +192,27 @@ regCmd("divide", [](const std::vector<std::string>& args) -> int
 ```
 
 
-## Безопасность
+### Safety
 
-- Максимальная длина ввода - 4096 символов
-- Выполняются только явно зарегистрированные команды
-- Нет вызовов system() или exec*()
-- Вывод экранируется для защиты от ANSI-инъекций
-- Каждая команда выполняется с таймаутом (по умолчанию 100 мс)
-- Логи пишутся в ~/.csm_cmd.log с ротацией (макс. 1 МБ, до 3 резервных копий)
-- История сохраняется в ~/.csm_cmd_history (макс. 1000 строк)
-- Нормально работает Ctrl+C (SIGINT)
+ - Maximum input length: 4096 characters
 
-## Структура
+ - Only explicitly registered commands can be executed
+
+ - No system() or exec*() calls
+
+ - Output is escaped to prevent ANSI injection
+
+ - Each command runs with a timeout (default: 100 ms)
+
+ - Logs written to ~/.csm_cmd.log with rotation (max 1 MB, up to 3 backups)
+
+ - History saved to ~/.csm_cmd_history (max 1000 lines)
+
+ - Ctrl+C (SIGINT) handled gracefully
+
+ - will use spdlog in future
+
+### Structure
 ```
 csm_cmd/
 ├── CMakeLists.txt
@@ -192,32 +221,23 @@ csm_cmd/
 │   └── csm_cmd/
 │       ├── cmd_registration.hpp
 │       ├── csm_terminal.hpp
-│       ├── command_parser.hpp
-│       └── command_registry.hpp
+│       ├── cmd_parser.hpp
+│       └── cmd_registry.hpp
 ├── src/
-│   ├── CmdParser/
-│   │   └── command_parser.cpp
-│   ├── CmdReg/
-│   │   ├── command_registry.cpp
-│   │   └── cmd_registration.cpp
-│   ├── CsmTerminal/
-│   │   └── csm_terminal.cpp
-│   ├── Logger/
-│   │   ├── logger.cpp
-│   │   └── logger.hpp
-│   ├── Tests/
-│   │   ├── test_parser.cpp
-│   │   ├── test_registry.cpp
-│   │   ├── test_completion.cpp
-│   │   └── test_timeout.cpp
-│   └── main.cpp
-└── examples/
-    ├── simple/
-    │   └── main.cpp
-    └── custom/
-        └── main.cpp
-    todo: add more
+│   ├── cmd_parser.cpp
+│   ├── cmd_registry.cpp
+│   ├── cmd_registration.cpp
+│   ├── csm_terminal.cpp
+│   ├── logger.cpp
+│   ├── main.cpp
+│   └── tests/
+│       ├── test_parser.cpp
+│       ├── test_registry.cpp
+│       ├── test_completion.cpp
+│       └── test_timeout.cpp
+├── examples/ todo
+└── docs/ todo (!!!)
 ```
 [LICENSE](LICENSE)
 
-Задать вопрос: abnaclut@gmail.com
+Ask a question: abnaclut@gmail.com
