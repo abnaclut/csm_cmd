@@ -1,14 +1,14 @@
 #include <csm_terminal.hpp>
 
+#include <algorithm>
 #include <csignal>
 #include <cstdlib>
 #include <ctime>
+#include <fstream>
 #include <future>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
-#include <algorithm>
-#include <fstream>
 
 #include <logger.hpp>
 
@@ -23,18 +23,26 @@ namespace csm_cmd
   std::string homeDirectory()
   {
     const char* home = std::getenv("HOME");
-    if (home != nullptr) { return home; }
-    return ".";
+  #ifdef _WIN32
+    if (home == nullptr) home = std::getenv("USERPROFILE");
+  #endif
+    return (home != nullptr) ? home : ".";
   }
 
   }  // namespace
 
-  Terminal::Terminal(const std::chrono::milliseconds command_timeout)
-    : timeout_(command_timeout)
+  Terminal& Terminal::instance()
+  {
+    static Terminal terminal;
+    return terminal;
+  }
+
+  Terminal::Terminal(std::chrono::milliseconds) : timeout_(kDefaultTimeout)
   {
     history_path_ = homeDirectory() + "/.csm_cmd_history";
+    log_path_ = homeDirectory() + "/.csm_cmd.log";
 
-    Logger::instance().configure(homeDirectory() + "/.csm_cmd.log");
+    Logger::instance().configure(log_path_);
     Logger::instance().info("Terminal initialized");
 
     repl_.install_window_change_handler();
@@ -42,8 +50,11 @@ namespace csm_cmd
     repl_.set_completion_count_cutoff(32);
     repl_.set_word_break_characters(" \t");
 
+    // Enable bracketed paste for better paste handling
+    repl_.enable_bracketed_paste();
+
     setupPrompt();
-    setupBuiltins();
+    registerBuiltins();
     setupCompletion();
     setupHighlighter();
     loadHistory();
@@ -53,11 +64,14 @@ namespace csm_cmd
 
   Terminal::~Terminal()
   {
-    // Flush any remaining history before saving
     flushHistoryCache();
     saveHistory();
 
-    if (active_instance_ == this) { active_instance_ = nullptr; }
+    if (active_instance_ == this)
+    {
+      active_instance_ = nullptr;
+    }
+
     Logger::instance().info("Terminal shutting down");
   }
 
@@ -67,7 +81,7 @@ namespace csm_cmd
     std::signal(SIGINT, &Terminal::signalHandler);
   }
 
-  void Terminal::signalHandler(const int signum)
+  void Terminal::signalHandler(int signum)
   {
     (void)signum;
     if (active_instance_ != nullptr)
@@ -82,7 +96,7 @@ namespace csm_cmd
     std::string escaped;
     escaped.reserve(text.size());
 
-    for (const unsigned char c : text)
+    for (unsigned char c : text)
     {
       if (c == 0x1b)
       {
@@ -95,7 +109,8 @@ namespace csm_cmd
       else if (c < 0x20 && c != '\n' && c != '\t')
       {
         std::ostringstream oss;
-        oss << "\\x" << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(c);
+        oss << "\\x" << std::hex << std::setw(2) << std::setfill('0')
+            << static_cast<int>(c);
         escaped += oss.str();
       }
       else
@@ -128,21 +143,26 @@ namespace csm_cmd
 
   void Terminal::setupCompletion()
   {
-    repl_.set_completion_callback([this](const std::string& input, int& context_len) -> replxx::Replxx::completions_t
+    repl_.set_completion_callback(
+      [this](const std::string& input, int& context_len)
+        -> replxx::Replxx::completions_t
     {
       context_len = static_cast<int>(input.size());
       replxx::Replxx::completions_t completions;
+
       for (const auto& name : registry_.getCompletions(input))
       {
         completions.emplace_back(name);
       }
+
       return completions;
     });
   }
 
   void Terminal::setupHighlighter()
   {
-    repl_.set_highlighter_callback([this](const std::string& input, replxx::Replxx::colors_t& colors)
+    repl_.set_highlighter_callback(
+      [this](const std::string& input, replxx::Replxx::colors_t& colors)
     {
       if (input.empty())
       {
@@ -157,7 +177,6 @@ namespace csm_cmd
 
       const std::string command = input.substr(0, first_space);
 
-      // Color the command name
       const replxx::Replxx::Color color = registry_.hasCommand(command)
         ? replxx::Replxx::Color::CYAN
         : replxx::Replxx::Color::RED;
@@ -167,7 +186,6 @@ namespace csm_cmd
         colors[i] = color;
       }
 
-      // Color arguments differently
       if (first_space < input.size())
       {
         for (std::size_t i = first_space + 1; i < colors.size(); ++i)
@@ -178,14 +196,15 @@ namespace csm_cmd
     });
   }
 
-  std::string Terminal::colorize(const std::string& text, const char* color) const
+  std::string Terminal::colorize(const std::string& text, const char* color)
   {
     return std::string(color) + text + kColorReset;
   }
 
-  std::string Terminal::formatHelpLine(const std::string& name, const std::string& description) const
+  std::string Terminal::formatHelpLine(const std::string& name,
+                                        const std::string& description)
   {
-    const int kColumnWidth = 20;
+    constexpr int kColumnWidth = 20;
     std::string padded_name = name;
 
     if (padded_name.size() < static_cast<size_t>(kColumnWidth))
@@ -201,9 +220,11 @@ namespace csm_cmd
     return colorize(padded_name, kColorBrightCyan) + " " + description;
   }
 
-  void Terminal::setupBuiltins()
+  void Terminal::registerBuiltins()
   {
-    registerCommand("help", [this](const std::vector<std::string>&)
+    // Core builtins - always available
+    registerCommand("help",
+      [this](const std::vector<std::string>&) -> int
     {
       std::cout << kColorBold << kColorBrightYellow << "\n"
                 << "╔══════════════════════════════════════════════════════════╗\n"
@@ -212,17 +233,10 @@ namespace csm_cmd
                 << kColorReset << "\n";
 
       const auto& names = registry_.getCommandNames();
-      size_t max_name_len = 0;
       for (const auto& name : names)
       {
-        max_name_len = std::max(max_name_len, name.size());
-      }
-      max_name_len = std::max(max_name_len, static_cast<size_t>(12));
-      max_name_len = std::min(max_name_len, static_cast<size_t>(30));
-
-      for (const auto& name : names)
-      {
-        std::cout << "  " << formatHelpLine(name, registry_.getDescription(name)) << "\n";
+        std::cout << "  " << formatHelpLine(name, registry_.getDescription(name))
+                  << "\n";
       }
 
       std::cout << "\n" << kColorDim << "  Tip: Use TAB for autocompletion\n"
@@ -231,28 +245,47 @@ namespace csm_cmd
       return 0;
     }, "List all available commands");
 
-    registerCommand("history", [this](const std::vector<std::string>& args) -> int
+    registerCommand("clear",
+      [](const std::vector<std::string>&) -> int
+    {
+      std::cout << "\x1b[2J\x1b[H";
+      return 0;
+    }, "Clear the terminal screen");
+
+    registerCommand("quit",
+      [this](const std::vector<std::string>&) -> int
+    {
+      std::cout << kColorBrightGreen << "Goodbye!" << kColorReset << "\n";
+      stop();
+      return 0;
+    }, "Exit the terminal");
+
+    registerCommand("exit",
+      [this](const std::vector<std::string>&) -> int
+    {
+      std::cout << kColorBrightGreen << "Goodbye!" << kColorReset << "\n";
+      stop();
+      return 0;
+    }, "Exit the terminal");
+
+    registerCommand("history",
+      [this](const std::vector<std::string>& args) -> int
     {
       bool show_all = false;
-      int limit = 20; // Default show last 20 commands
+      int limit = 20;
 
-      // Parse arguments
       for (const auto& arg : args)
       {
         if (arg == "--all" || arg == "-a")
         {
           show_all = true;
         }
-        else if (arg == "--limit" || arg == "-l")
-        {
-          // Would need to parse next argument, but for simplicity we'll skip
-        }
       }
 
       std::cout << kColorBold << kColorBrightYellow
                 << "\n╔══════════════════════════════════════════════════════════╗\n"
-                << "║                    COMMAND HISTORY                       ║\n"
-                << "╚══════════════════════════════════════════════════════════╝\n"
+                  << "║                    COMMAND HISTORY                       ║\n"
+                  << "╚══════════════════════════════════════════════════════════╝\n"
                 << kColorReset << "\n";
 
       if (history_cache_.empty())
@@ -261,40 +294,35 @@ namespace csm_cmd
       }
       else
       {
-        // Determine start index for display
-        size_t start_index = show_all ? 0 : std::max(0, static_cast<int>(history_cache_.size()) - limit);
-        size_t total_commands = total_history_count_ - history_cache_.size() + start_index + 1;
+        size_t start_index = show_all ? 0 :
+          std::max(0, static_cast<int>(history_cache_.size()) - limit);
+
+        size_t total_commands = total_history_count_
+          - history_cache_.size() + start_index + 1;
 
         for (size_t i = start_index; i < history_cache_.size(); ++i)
         {
-          std::cout << "  " << colorize(std::to_string(total_commands + i - start_index), kColorBrightMagenta)
-                    << "  " << colorize(history_cache_[i], kColorBrightCyan) << "\n";
+          std::cout << "  "
+                    << colorize(std::to_string(total_commands + i - start_index),
+                                kColorBrightMagenta)
+                    << "  "
+                    << colorize(history_cache_[i], kColorBrightCyan)
+                    << "\n";
         }
 
-        std::cout << kColorDim << "\n  Total commands: " << total_history_count_
+        std::cout << kColorDim << "\n  Total: " << total_history_count_
                   << " | Showing " << (history_cache_.size() - start_index)
-                  << " of " << history_cache_.size() << " cached" << kColorReset << "\n";
+                  << " of " << history_cache_.size() << kColorReset << "\n";
       }
+
       std::cout << "\n";
       return 0;
-    }, "Show command history [--all] [-l N]");
+    }, "Show command history [--all]");
 
-    registerCommand("clear", [](const std::vector<std::string>&)
+    registerCommand("echo",
+      [](const std::vector<std::string>& args) -> int
     {
-      std::cout << "\x1b[2J\x1b[H";
-      return 0;
-    }, "Clear the terminal screen");
-
-    registerCommand("quit", [this](const std::vector<std::string>&)
-    {
-      std::cout << kColorBrightGreen << "Goodbye!" << kColorReset << "\n";
-      stop();
-      return 0;
-    }, "Exit the terminal");
-
-    registerCommand("echo", [](const std::vector<std::string>& args)
-    {
-      for (std::size_t i = 0; i < args.size(); ++i)
+      for (size_t i = 0; i < args.size(); ++i)
       {
         std::cout << args[i] << (i + 1 < args.size() ? " " : "");
       }
@@ -302,15 +330,17 @@ namespace csm_cmd
       return 0;
     }, "Print arguments back to the terminal");
 
-    registerCommand("version", [](const std::vector<std::string>&)
+    registerCommand("version",
+      [](const std::vector<std::string>&) -> int
     {
       std::cout << kColorBrightCyan << "csm_cmd "
-                << kColorBrightYellow << "1.0.0"
-                << kColorReset << " - CSBot Terminal Interface\n";
+                << kColorBrightYellow << "1.1.0"
+                << kColorReset << " - CSM CMD Terminal Interface\n";
       return 0;
     }, "Print terminal version");
 
-    registerCommand("time", [](const std::vector<std::string>&)
+    registerCommand("time",
+      [](const std::vector<std::string>&) -> int
     {
       const std::time_t now = std::time(nullptr);
       std::tm tm_buf{};
@@ -319,22 +349,42 @@ namespace csm_cmd
   #else
       localtime_r(&now, &tm_buf);
   #endif
-      std::cout << kColorBrightGreen << std::put_time(&tm_buf, "%Y-%m-%d %H:%M:%S")
-                << kColorReset << "\n";
+      std::cout << kColorBrightGreen << std::put_time(&tm_buf, "%Y-%m-%d %H:%M:%S") << kColorReset << "\n";
       return 0;
     }, "Print the current date and time");
 
-    //TODO register your commands here
+    // Test commands (only available in debug builds)
+  #ifdef CSM_CMD_BUILD_TESTS
+    registerCommand("test_echo",
+      [](const std::vector<std::string>& args) -> int
+    {
+      std::cout << "Test echo received " << args.size() << " args:\n";
+      for (size_t i = 0; i < args.size(); ++i)
+      {
+        std::cout << "  [" << i << "] '" << args[i] << "'\n";
+      }
+      return 0;
+    }, "Test command for debugging");
+
+    registerCommand("test_error",
+      [](const std::vector<std::string>&) -> int
+    {
+      throw std::runtime_error("This is a test error");
+    }, "Test command that throws an error");
+
+    registerCommand("test_timeout",
+      [](const std::vector<std::string>&) -> int
+    {
+      std::this_thread::sleep_for(std::chrono::milliseconds(500));
+      return 0;
+    }, "Test command that simulates timeout");
+  #endif
   }
 
   void Terminal::flushHistoryCache()
   {
-    if (pending_flush_.empty())
-    {
-      return;
-    }
+    if (pending_flush_.empty()) { return; }
 
-    // Open file in append mode
     std::ofstream history_file(history_path_, std::ios::app);
     if (!history_file.is_open())
     {
@@ -342,24 +392,20 @@ namespace csm_cmd
       return;
     }
 
-    // Write all pending commands
-    for (const auto& cmd : pending_flush_)
-    {
-      history_file << cmd << "\n";
-    }
+    for (const auto& cmd : pending_flush_) { history_file << cmd << "\n"; }
 
     history_file.close();
+
+    const size_t count = pending_flush_.size();
     pending_flush_.clear();
 
-    Logger::instance().debug("Flushed " + std::to_string(pending_flush_.size()) + " commands to history file");
+    Logger::instance().debug("Flushed " + std::to_string(count) + " commands to history file");
   }
 
   void Terminal::loadHistory()
   {
-    // Load history from file into replxx
     repl_.history_load(history_path_);
 
-    // Also populate our cache from the file
     std::ifstream history_file(history_path_);
     if (history_file.is_open())
     {
@@ -376,11 +422,8 @@ namespace csm_cmd
       }
       history_file.close();
 
-      // Keep only the last kMaxCachedHistory entries
-      while (temp_cache.size() > kMaxCachedHistory)
-      {
-        temp_cache.pop_front();
-      }
+      while (temp_cache.size() > kMaxCachedHistory) { temp_cache.pop_front(); }
+
       history_cache_ = std::move(temp_cache);
     }
 
@@ -389,51 +432,37 @@ namespace csm_cmd
 
   void Terminal::saveHistory()
   {
-    // Final flush before saving
     flushHistoryCache();
-
-    // Save full history from replxx
     repl_.history_save(history_path_);
     Logger::instance().info("Saved history");
   }
 
   void Terminal::addHistoryEntry(const std::string& line)
   {
-    // Add to replxx history
     repl_.history_add(line);
 
-    // Add to cache
     history_cache_.push_back(line);
     ++total_history_count_;
 
-    // Keep cache size limited
     while (history_cache_.size() > kMaxCachedHistory)
     {
-      // Move oldest command to pending flush
       pending_flush_.push_back(history_cache_.front());
       history_cache_.pop_front();
 
-      // If pending flush reaches threshold, write to file
-      if (pending_flush_.size() >= kHistoryFlushThreshold)
-      {
-        flushHistoryCache();
-      }
+      if (pending_flush_.size() >= kHistoryFlushThreshold) { flushHistoryCache(); }
     }
   }
 
   int Terminal::executeWithTimeout(const std::string& name, const std::vector<std::string>& args) const
   {
-    auto future = std::async(std::launch::async, [this, name, args]()
-    {
-      return registry_.execute(name, args);
-    });
+    auto future = std::async(std::launch::async, [this, name, args]() -> int { return registry_.execute(name, args); });
 
     const auto status = future.wait_for(timeout_);
+
     if (status != std::future_status::ready)
     {
-      Logger::instance().warn("Command timed out after " + std::to_string(timeout_.count()) + "ms: " + name);
-      std::cerr << colorize("✗ Command timed out: ", kColorBrightRed)
-                << colorize(name, kColorBrightYellow) << "\n";
+      Logger::instance().warn("Command timed out: " + name + " (" + std::to_string(timeout_.count()) + "ms)");
+      std::cerr << colorize("✗ Command timed out: ", kColorBrightRed) << colorize(name, kColorBrightYellow) << "\n";
       return -2;
     }
 
@@ -449,24 +478,18 @@ namespace csm_cmd
 
     if (!registry_.hasCommand(name))
     {
-      Logger::instance().warn("Rejected unknown command: " + name);
-      std::cerr << colorize("✗ Unknown command: ", kColorBrightRed)
-                << colorize(name, kColorBrightYellow)
-                << colorize(" (not in whitelist)", kColorDim) << "\n";
+      Logger::instance().warn("Unknown command: " + name);
+      std::cerr << colorize("✗ Unknown command: ", kColorBrightRed) << colorize(name, kColorBrightYellow) << colorize(" (not registered)", kColorDim) << "\n";
       return -1;
     }
 
-    Logger::instance().info("Executing command: " + name);
+    Logger::instance().info("Executing: " + name + " (" + std::to_string(args.size()) + " args)");
 
-    try
-    {
-      return executeWithTimeout(name, args);
-    }
+    try { return executeWithTimeout(name, args); }
     catch (const std::exception& ex)
     {
-      Logger::instance().error("Command '" + name + "' threw: " + ex.what());
-      std::cerr << colorize("✗ Command failed: ", kColorBrightRed)
-                << colorize(ex.what(), kColorBrightYellow) << "\n";
+      Logger::instance().error("Command '" + name + "' failed: " + ex.what());
+      std::cerr << colorize("✗ Command failed: ", kColorBrightRed) << colorize(ex.what(), kColorBrightYellow) << "\n";
       return -3;
     }
   }
@@ -475,41 +498,32 @@ namespace csm_cmd
   {
     running_ = true;
 
-    std::cout << "(все баги закомичены хакерами)"
-              << "\n╔══════════════════════════════════════════════════════════╗\n"
-                << "║           WELCOME TO CSM_CMD TERMINAL v1.0.0             ║\n"
-                << "║              Type 'help' to get started                  ║\n"
-                << "╚══════════════════════════════════════════════════════════╝\n"
-              << "\n";
+    std::cout << "\n╔══════════════════════════════════════════════════════════╗\n"
+                << "║           CSM_CMD TERMINAL v1.1.0                        ║\n"
+                << "║           Type 'help' to get started                     ║\n"
+                << "╚══════════════════════════════════════════════════════════╝\n";
 
     while (running_)
     {
       const char* raw_line = repl_.input(kPrompt);
 
       if (raw_line == nullptr) { break; }
-
       const std::string line(raw_line);
 
       if (line.empty()) { continue; }
-
       std::vector<std::string> tokens;
-      try
-      {
-        tokens = parser_.parse(line);
-      }
+
+      try { tokens = parser_.parse(line); }
       catch (const ParseError& ex)
       {
-        Logger::instance().warn(std::string("Parse error: ") + ex.what());
-        std::cerr << colorize("✗ Parse error: ", kColorBrightRed)
-                  << ex.what() << "\n";
+        Logger::instance().warn("Parse error: " + std::string(ex.what()));
+        std::cerr << colorize("✗ Parse error: ", kColorBrightRed) << ex.what() << "\n";
         continue;
       }
 
       if (tokens.empty()) { continue; }
 
-      // Add to history with efficient caching
       addHistoryEntry(line);
-
       dispatch(tokens);
     }
 

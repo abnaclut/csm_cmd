@@ -12,7 +12,7 @@ namespace csm_cmd
   namespace
   {
     // Global state
-    std::unique_ptr<Terminal> g_terminal;
+    Terminal* g_terminal = nullptr;
     std::mutex g_terminal_mutex;
     bool g_initialized = false;
 
@@ -164,13 +164,13 @@ namespace csm_cmd
   }
 
   // Terminal lifecycle functions
-  void initTerminal(std::chrono::milliseconds timeout)
+  void initTerminal()
   {
     std::lock_guard<std::mutex> lock(g_terminal_mutex);
 
     if (!g_initialized)
     {
-      g_terminal = std::make_unique<Terminal>(timeout);
+      g_terminal = &Terminal::instance();
       g_initialized = true;
 
       // Apply any pending registrations
@@ -193,7 +193,7 @@ namespace csm_cmd
   Terminal* getTerminal()
   {
     std::lock_guard<std::mutex> lock(g_terminal_mutex);
-    return g_terminal.get();
+    return g_terminal;
   }
 
   bool isTerminalInitialized()

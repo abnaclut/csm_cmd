@@ -78,7 +78,7 @@ namespace csm_cmd
   }
 
   // Terminal lifecycle management
-  void initTerminal(std::chrono::milliseconds timeout = Terminal::kDefaultTimeout);
+  void initTerminal();
   void runTerminal();
   Terminal* getTerminal();
   bool isTerminalInitialized();

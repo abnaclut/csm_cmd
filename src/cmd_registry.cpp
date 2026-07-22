@@ -84,7 +84,7 @@ namespace csm_cmd
     return result;
   }
 
-    void CommandRegistry::clear()
+    void CommandRegistry::clear() noexcept
   {
     commands_.clear();
     aliases_.clear();
