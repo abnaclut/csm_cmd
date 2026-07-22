@@ -12,12 +12,14 @@ namespace csm_cmd
     if (commands_.contains(name)) { throw CommandError("command already registered: " + name); }
 
     commands_.emplace(name, CommandInfo{name, description, std::move(handler)});
-    command_count++;
   }
 
   void CommandRegistry::registerAlias(const std::string& alias, const std::string& target)
   {
-    if (!commands_.contains(target)) { throw CommandError("cannot alias unknown command: " + target); }
+    if (alias.empty() || target.empty()) { throw CommandError("alias and target must not be empty"); }
+    if (alias == target)                 { throw CommandError("alias cannot be the same as target"); }
+    if (aliases_.contains(alias))        { throw CommandError("alias already exists: " + alias); }
+    if (!commands_.contains(target))     { throw CommandError("cannot alias unknown command: " + target); }
 
     aliases_[alias] = target;
   }
@@ -28,7 +30,11 @@ namespace csm_cmd
     return name;
   }
 
-  bool CommandRegistry::hasCommand(const std::string& name) const { return commands_.contains(resolveAlias(name)); }
+  bool CommandRegistry::hasCommand(const std::string& name) const
+  {
+    if (name.empty()) { return false; }
+    return commands_.contains(resolveAlias(name));
+  }
 
   int CommandRegistry::execute(const std::string& name, const std::vector<std::string>& args) const
   {
@@ -55,7 +61,7 @@ namespace csm_cmd
     return names;
   }
 
-  std::unordered_map<std::string, CommandRegistry::CommandInfo> CommandRegistry::getCommands()
+  const std::unordered_map<std::string, CommandRegistry::CommandInfo>& CommandRegistry::getCommands() const
   {
     return commands_;
   }
@@ -84,6 +90,6 @@ namespace csm_cmd
     aliases_.clear();
   }
 
-  unsigned int CommandRegistry::size() const { return command_count; }
+  unsigned int CommandRegistry::size() const noexcept { return static_cast<unsigned int>(commands_.size()); }
 
 }  // namespace csm_cmd

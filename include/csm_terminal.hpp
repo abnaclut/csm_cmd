@@ -53,7 +53,9 @@ public:
    */
   void stop();
 
+  //public registry getter for certain methods
   CommandRegistry& getRegistry() { return registry_; }
+  //public registry getter for certain methods
   const CommandRegistry& getRegistry() const { return registry_; }
 private:
   // Color constants

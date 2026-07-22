@@ -10,90 +10,89 @@
 namespace csm_cmd
 {
 
-/**
- * @brief Thrown when executing an unregistered or malformed command.
- */
-class CommandError final : public std::runtime_error
-{
-public:
-  explicit CommandError(const std::string& message) : std::runtime_error(message) {}
-};
-
-/**
- * @brief Command registry that maintains a whitelist of executable commands
- */
-class CommandRegistry
-{
-public:
-  using CommandHandler = std::function<int(const std::vector<std::string>&)>;
-
-  struct CommandInfo
+  /**
+   * @brief Thrown when executing an unregistered or malformed command.
+   */
+  class CommandError final : public std::runtime_error
   {
-    std::string name;
-    std::string description;
-    CommandHandler handler;
+  public:
+    explicit CommandError(const std::string& message) : std::runtime_error(message) {}
   };
 
   /**
-   * @brief Register a new command
-   * @throws CommandError if name is empty or already registered
+   * @brief Command registry that maintains a whitelist of executable commands
    */
-  void registerCommand(const std::string& name, CommandHandler handler, const std::string& description);
+  class CommandRegistry
+  {
+  public:
+    using CommandHandler = std::function<int(const std::vector<std::string>&)>;
 
-  /**
-   * @brief Register an alias for an existing command
-   * @throws CommandError if target command doesn't exist
-   */
-  void registerAlias(const std::string& alias, const std::string& target);
+    struct CommandInfo
+    {
+      std::string name;
+      std::string description;
+      CommandHandler handler;
+    };
 
-  /**
-   * @brief Check if a command or alias exists
-   */
-  bool hasCommand(const std::string& name) const;
-
-  /**
-   * @brief Execute a command by name
-   * @throws CommandError if command not registered
-   */
-  int execute(const std::string& name, const std::vector<std::string>& args) const;
-
-  /**
-   * @brief Get command description
-   */
-  std::string getDescription(const std::string& name) const;
-
-  /**
-   * @brief Get all registered command names, sorted alphabetically
-   */
-  std::vector<std::string> getCommandNames() const;
-
-  /**
-   * @brief Get a map of registered commands (name; description)
-   */
-  std::unordered_map<std::string, CommandInfo> getCommands();
-
-  /**
-   * @brief Get completions for a given prefix
-   */
-  std::vector<std::string> getCompletions(const std::string& prefix) const;
-
-  /**
-     * @brief Clear command registry.
+    /**
+     * @brief Register a new command
+     * @throws CommandError if name is empty or already registered
      */
-  void clear();
+    void registerCommand(const std::string& name, CommandHandler handler, const std::string& description);
 
-  /**
-     * @brief Get the registered command count.
+    /**
+     * @brief Register an alias for an existing command
+     * @throws CommandError if target command doesn't exist
      */
-  unsigned int size() const;
+    void registerAlias(const std::string& alias, const std::string& target);
 
-private:
-  unsigned int command_count = 0;
-  std::string resolveAlias(const std::string& name) const;
+    /**
+     * @brief Check if a command or alias exists
+     */
+    bool hasCommand(const std::string& name) const;
 
-  std::unordered_map<std::string, CommandInfo> commands_;
-  std::unordered_map<std::string, std::string> aliases_;
-};
+    /**
+     * @brief Execute a command by name
+     * @throws CommandError if command not registered
+     */
+    int execute(const std::string& name, const std::vector<std::string>& args) const;
+
+    /**
+     * @brief Get command description
+     */
+    [[nodiscard]] std::string getDescription(const std::string& name) const;
+
+    /**
+     * @brief Get all registered command names, sorted alphabetically
+     */
+    [[nodiscard]] std::vector<std::string> getCommandNames() const;
+
+    /**
+     * @brief Get a map of registered commands (name; description)
+     */
+    [[nodiscard]] const std::unordered_map<std::string, CommandInfo>& getCommands() const;
+
+    /**
+     * @brief Get completions for a given prefix
+     */
+    [[nodiscard]] std::vector<std::string> getCompletions(const std::string& prefix) const;
+
+    /**
+       * @brief Clear command registry.
+       */
+    void clear() noexcept;
+
+    /**
+       * @brief Get the registered command count.
+       */
+    unsigned int size() const noexcept;
+
+  private:
+    std::string resolveAlias(const std::string& name) const;
+
+    std::unordered_map<std::string, CommandInfo> commands_;
+    std::unordered_map<std::string, std::string> aliases_;
+  };
 
 }  // namespace csm_cmd
 
